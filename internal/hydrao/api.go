@@ -1,7 +1,11 @@
 package hydrao
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -69,6 +73,58 @@ func NewClient(config Config, logger log.Logger) *Client {
 			},
 		},
 	}
+}
+
+func (c *Client) NewSession() error {
+	buffer := new(bytes.Buffer)
+	data := struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}{
+		Email:    c.hydrao.Config.Email,
+		Password: c.hydrao.Config.Password,
+	}
+	if err := json.NewEncoder(buffer).Encode(data); err != nil {
+		return err
+	}
+	now := time.Now()
+
+	resp, err := c.doHTTPPost(authURL, c.hydrao.Config, buffer)
+	if err != nil {
+		return err
+	}
+
+	if err = processHTTPResponse(resp, err, c.hydrao); err != nil {
+		return err
+	}
+	c.hydrao.TokenRefresh = now
+
+	return nil
+}
+
+func (c *Client) RefreshSession() error {
+	buffer := new(bytes.Buffer)
+	data := struct {
+		RefreshToken string `json:"refresh_token"`
+	}{
+		RefreshToken: c.hydrao.RefreshToken,
+	}
+	if err := json.NewEncoder(buffer).Encode(data); err != nil {
+		return err
+	}
+	now := time.Now()
+
+	resp, err := c.doHTTPPost(authURL, c.hydrao.Config, buffer)
+	if err != nil {
+		return err
+	}
+
+	if err = processHTTPResponse(resp, err, c.hydrao); err != nil {
+		return err
+	}
+	c.hydrao.TokenRefresh = now
+
+	return nil
 }
 
 
