@@ -82,6 +82,27 @@ type ShowerHead struct {
 	Email              any       `json:"email"`
 	UserID             any       `json:"user_id"`
 	FwCandidate        string    `json:"fw_candidate"`
+	Showers            []*Shower `json:"showers"`
+}
+
+type Threshold struct {
+	Color string `json:"color"`
+	Liter int16  `json:"liter"`
+}
+
+type Shower struct {
+	ShowerID         int16   `json:"shower_id"`
+	DeviceUUID       string  `json:"device_uuid"`
+	Volume           int16   `json:"volume"`
+	Temperature      float32 `json:"temperature"`
+	Flow             float32 `json:"flow"`
+	SoapingTime      int16   `json:"soaping_time"`
+	Duration         int16   `json:"duration"`
+	Date             string  `json:"date"`
+	IsRealDate       int16   `json:"is_real_date"`
+	IsBaseline       int16   `json:"is_baseline"`
+	NumberOfSoapings int16   `json:"number_of_soapings"`
+	Threshold        string  `json:"threshold"`
 }
 
 // NewClient create a handle authentication to Hydrao API
@@ -174,9 +195,29 @@ func (c *Client) GetShowerheads() ([]*ShowerHead, error) {
 		return nil, err
 	}
 
+	err = c.GetShowers()
+	if err != nil {
+		return nil, err
+	}
+
 	return c.showerHeads, nil
 }
 
+func (c *Client) GetShowers() error {
+	buffer := new(bytes.Buffer)
+
+	for _, showerhead := range c.showerHeads {
+		resp, err := c.doHTTPGet(showerheadsURL+showerhead.DeviceUUID+"/showers", c.hydrao.Config, buffer)
+		if err != nil {
+			return err
+		}
+		if err = processHTTPResponse(resp, err, &showerhead.Showers); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 // do a url encoded HTTP POST request
 func (c *Client) doHTTPPost(url string, config Config, data io.Reader) (*http.Response, error) {
