@@ -46,6 +46,42 @@ type Client struct {
 	logger       log.Logger
 	httpResponse *http.Response
 	hydrao       *SessionInfo
+	showerHeads  []*ShowerHead
+}
+
+type ShowerHead struct {
+	DeviceUUID         string    `json:"device_uuid"`
+	FirstSeen          time.Time `json:"first_seen"`
+	LastSeen           time.Time `json:"last_seen"`
+	BaselineStart      any       `json:"baseline_start"`
+	BaselineStop       any       `json:"baseline_stop"`
+	HwVersion          string    `json:"hw_version"`
+	FwVersion          string    `json:"fw_version"`
+	Threshold          string    `json:"threshold"`
+	UpgradeDate        any       `json:"upgrade_date"`
+	UpgradeFailed      any       `json:"upgrade_failed"`
+	UpgradeFromVersion any       `json:"upgrade_from_version"`
+	ThresholdRequest   string    `json:"threshold_request"`
+	GatewayUuid        string    `json:"gateway_uuid"`
+	Label              string    `json:"label"`
+	PreviousFlow       int16     `json:"previous_flow"`
+	Type               string    `json:"type"`
+	MacAddress         string    `json:"mac_address"`
+	LastSyncMinIndex   int16     `json:"last_sync_min_index"`
+	LastSyncMaxIndex   int16     `json:"last_sync_max_index"`
+	LastSyncDate       time.Time `json:"last_sync_date"`
+	RefShowerDuration  int16     `json:"ref_shower_duration"`
+	Calibration        int16     `json:"calibration"`
+	IsLastSyncComplete int16     `json:"is_last_sync_complete"`
+	Serial             any       `json:"serial"`
+	BatchNumber        string    `json:"batch_number"`
+	PlaceId            int16     `json:"place_id"`
+	Connectivity       string    `json:"connectivity"`
+	Flow               float32   `json:"flow"`
+	CalibrationRequest any       `json:"calibration_request"`
+	Email              any       `json:"email"`
+	UserID             any       `json:"user_id"`
+	FwCandidate        string    `json:"fw_candidate"`
 }
 
 // NewClient create a handle authentication to Hydrao API
@@ -127,6 +163,20 @@ func (c *Client) RefreshSession() error {
 	return nil
 }
 
+func (c *Client) GetShowerheads() ([]*ShowerHead, error) {
+	buffer := new(bytes.Buffer)
+	resp, err := c.doHTTPGet(showerheadsURL, c.hydrao.Config, buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = processHTTPResponse(resp, err, &c.showerHeads); err != nil {
+		return nil, err
+	}
+
+	return c.showerHeads, nil
+}
+
 
 // do a url encoded HTTP POST request
 func (c *Client) doHTTPPost(url string, config Config, data io.Reader) (*http.Response, error) {
@@ -138,6 +188,35 @@ func (c *Client) doHTTPPost(url string, config Config, data io.Reader) (*http.Re
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("x-api-key", config.ApiKey)
+	// for _, cb := range callbacks {
+	// 	cb(req)
+	// }
+	return c.do(req)
+}
+
+// do a url encoded HTTP Get request
+func (c *Client) doHTTPGet(url string, config Config, data io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest("GET", url, data)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+
+	if now.Sub(c.hydrao.TokenRefresh) > time.Duration(c.hydrao.ExpiresIn)*time.Second-time.Duration(100)*time.Second {
+		level.Debug(c.logger).Log("msg", "token expires in value %d", c.hydrao.ExpiresIn)
+		level.Debug(c.logger).Log("msg", "time since last refresh %d", now.Sub(c.hydrao.TokenRefresh))
+		level.Debug(c.logger).Log("msg", "token expires minus 100 %d", time.Duration(c.hydrao.ExpiresIn)*time.Second-time.Duration(100)*time.Second)
+		err = c.RefreshSession()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("x-api-key", config.ApiKey)
+	req.Header.Set("Authorization", c.hydrao.AccessToken)
 	// for _, cb := range callbacks {
 	// 	cb(req)
 	// }
